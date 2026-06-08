@@ -225,7 +225,7 @@ const FAQ = {
             'Store Information': [
                 {
                     title: 'Store Opening Times',
-                    content: `<p>Store opening times vary by location. Please use our Store Locator to find your nearest store and check its opening hours.</p>
+                    content: `<p>Store opening times vary by location. Please use our to find your nearest store and check its opening hours.</p>
 <p>Most stores are open Monday to Saturday 9am–6pm and Sunday 10am–4pm.</p>`
                 },
                 {

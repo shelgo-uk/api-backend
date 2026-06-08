@@ -1,10 +1,10 @@
 module.exports = {
     ftp: {
-        baseURL: process.env.FTP_BASE_URL || '',
-        host: process.env.FTP_HOST || '',
-        user: process.env.FTP_USER || '',
-        password: process.env.FTP_PASSWORD || '',
-        secure: process.env.FTP_SECURE === 'true'
+        baseURL: 'asset.svarnibeauty.com',
+        host: '217.21.85.80',
+        user: 'u677986030.asset.svarnibeauty.com',
+        password: "Aidges@1011",
+        secure: false
     },
-    uploadDir: process.env.FTP_UPLOAD_DIR || '/public_html/'
+    uploadDir: '/public_html/'
 };
