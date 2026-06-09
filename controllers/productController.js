@@ -76,6 +76,36 @@ exports.deleteProduct = async (req, res) => {
     }
 };
 
+exports.exportProducts = async (req, res) => {
+    try {
+        const filters = {};
+        if (req.query.categoryId) filters.categoryId = Number(req.query.categoryId);
+        if (req.query.brandId)    filters.brandId    = Number(req.query.brandId);
+        const result = await Product.getAllForExport(filters);
+        res.status(200).json(result);
+    } catch (err) {
+        console.error('exportProducts:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+exports.bulkImportProducts = async (req, res) => {
+    try {
+        const items = req.body?.products || req.body?.items || [];
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ error: 'products array is required' });
+        }
+        if (items.length > 500) {
+            return res.status(400).json({ error: 'Maximum 500 products per import' });
+        }
+        const result = await Product.bulkCreate(items);
+        res.status(200).json({ message: 'Bulk import complete', ...result });
+    } catch (err) {
+        console.error('bulkImportProducts:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
 // ── Public ─────────────────────────────────────────────────────────────────
 
 exports.getShopListing = async (req, res) => {

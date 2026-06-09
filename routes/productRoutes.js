@@ -10,6 +10,8 @@ router.get('/getProductById/:id',        auth, ctrl.getProductById);
 router.put('/updateProduct/:id',         auth, ctrl.updateProduct);
 router.put('/updateProductStatus/:id',   auth, ctrl.updateProductStatus);
 router.delete('/deleteProduct/:id',      auth, ctrl.deleteProduct);
+router.get('/exportProducts',            auth, ctrl.exportProducts);
+router.post('/bulkImportProducts',       auth, ctrl.bulkImportProducts);
 
 // Reviews admin
 router.get('/getAllReviews',             auth, ctrl.getAllReviewsByPage);

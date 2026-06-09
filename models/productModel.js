@@ -275,6 +275,95 @@ const Product = {
         } catch (err) { throw err; }
     },
 
+    getAllForExport: async (filters = {}) => {
+        try {
+            let where = [];
+            let params = [];
+            if (filters.categoryId) { where.push(`p.categoryId = ?`); params.push(filters.categoryId); }
+            if (filters.brandId)    { where.push(`p.brandId = ?`);    params.push(filters.brandId); }
+            const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+            const [results] = await db.execute(
+                `SELECT p.*, c.name AS categoryName, b.name AS brandName
+                 FROM products p
+                 LEFT JOIN categories c ON p.categoryId = c.id
+                 LEFT JOIN brands b ON p.brandId = b.id
+                 ${whereClause}
+                 ORDER BY p.id ASC`,
+                params
+            );
+            return { status: 'success', data: results.map(r => Product._parse(r)) };
+        } catch (err) { throw err; }
+    },
+
+    bulkCreate: async (items = []) => {
+        const created = [];
+        const failed = [];
+
+        const [cats] = await db.execute(`SELECT id, name FROM categories`);
+        const [brands] = await db.execute(`SELECT id, name FROM brands`);
+        const catMap = {};
+        const brandMap = {};
+        cats.forEach(c => { catMap[c.name.toLowerCase().trim()] = c.id; });
+        brands.forEach(b => { brandMap[b.name.toLowerCase().trim()] = b.id; });
+
+        const slugify = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+        for (let i = 0; i < items.length; i++) {
+            const row = items[i];
+            try {
+                if (!row.name || !String(row.name).trim()) {
+                    failed.push({ row: i + 1, name: row.name || '', error: 'Name is required' });
+                    continue;
+                }
+
+                let categoryId = row.categoryId || null;
+                let brandId = row.brandId || null;
+                if (!categoryId && row.categoryName) {
+                    categoryId = catMap[String(row.categoryName).toLowerCase().trim()] || null;
+                }
+                if (!brandId && row.brandName) {
+                    brandId = brandMap[String(row.brandName).toLowerCase().trim()] || null;
+                }
+
+                let images = row.images || [];
+                if (typeof images === 'string') {
+                    images = images.split('|').map(s => s.trim()).filter(Boolean);
+                }
+                if (row.imageUrls && typeof row.imageUrls === 'string') {
+                    images = row.imageUrls.split('|').map(s => s.trim()).filter(Boolean);
+                }
+
+                let tags = row.tags || [];
+                if (typeof tags === 'string') {
+                    tags = tags.split('|').map(s => s.trim()).filter(Boolean);
+                }
+
+                const payload = {
+                    name: String(row.name).trim(),
+                    slug: row.slug ? String(row.slug).trim() : slugify(row.name),
+                    description: row.description || '',
+                    price: parseFloat(row.price) || 0,
+                    salePrice: row.salePrice ? parseFloat(row.salePrice) : null,
+                    categoryId,
+                    brandId,
+                    images,
+                    variants: row.variants || [],
+                    tags,
+                    isActive: row.isActive === false || row.isActive === 'false' || row.isActive === 0 || row.isActive === '0' ? 0 : 1,
+                    sortOrder: parseInt(row.sortOrder, 10) || 0
+                };
+
+                const result = await Product.create(payload);
+                created.push({ row: i + 1, id: result.data.id, name: payload.name });
+            } catch (err) {
+                failed.push({ row: i + 1, name: row.name || '', error: err.message || 'Insert failed' });
+            }
+        }
+
+        return { status: 'success', created, failed, totalCreated: created.length, totalFailed: failed.length };
+    },
+
     _parse: (r) => ({
         ...r,
         images:   Product._tryParse(r.images,   []),
