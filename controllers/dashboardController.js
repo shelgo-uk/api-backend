@@ -2,7 +2,8 @@ const Dashboard = require('../models/dashboardModel');
 
 exports.adminDashboard = async (req, res) => {
   try {
-    const results = await Dashboard.adminDashboard();
+    const period = req.query.period || 'month';
+    const results = await Dashboard.adminDashboard(period);
     res.status(200).json(results);
   } catch (err) {
     console.error('Error fetching Dashboard:', err);

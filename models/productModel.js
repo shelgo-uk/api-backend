@@ -6,9 +6,11 @@ const Product = {
         const conn = await db.getConnection();
         try {
             await conn.beginTransaction();
+            const avgRating = data.avgRating != null ? parseFloat(data.avgRating) : 0;
+            const reviewCount = data.reviewCount != null ? parseInt(data.reviewCount, 10) : 0;
             const [result] = await conn.execute(
-                `INSERT INTO products (name, slug, description, price, salePrice, categoryId, brandId, images, variants, tags, isActive, sortOrder, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+                `INSERT INTO products (name, slug, description, price, salePrice, categoryId, brandId, images, variants, tags, isActive, sortOrder, avgRating, reviewCount, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
                 [
                     data.name, data.slug || '', data.description || '',
                     data.price || 0, data.salePrice || null,
@@ -17,7 +19,9 @@ const Product = {
                     JSON.stringify(data.variants || []),
                     JSON.stringify(data.tags || []),
                     data.isActive !== undefined ? (data.isActive ? 1 : 0) : 1,
-                    data.sortOrder || 0
+                    data.sortOrder || 0,
+                    avgRating || 0,
+                    reviewCount || 0
                 ]
             );
             await conn.commit();
@@ -231,7 +235,8 @@ const Product = {
         try {
             await db.execute(
                 `UPDATE products SET name=?, slug=?, description=?, price=?, salePrice=?,
-                 categoryId=?, brandId=?, images=?, variants=?, tags=?, isActive=?, sortOrder=?, updated_at=NOW()
+                 categoryId=?, brandId=?, images=?, variants=?, tags=?, isActive=?, sortOrder=?,
+                 avgRating=?, reviewCount=?, updated_at=NOW()
                  WHERE id=?`,
                 [
                     data.name, data.slug || '', data.description || '',
@@ -241,7 +246,10 @@ const Product = {
                     JSON.stringify(data.variants || []),
                     JSON.stringify(data.tags || []),
                     data.isActive !== undefined ? (data.isActive ? 1 : 0) : 1,
-                    data.sortOrder || 0, id
+                    data.sortOrder || 0,
+                    data.avgRating != null ? parseFloat(data.avgRating) : 0,
+                    data.reviewCount != null ? parseInt(data.reviewCount, 10) : 0,
+                    id
                 ]
             );
             return { status: 'success' };
@@ -300,14 +308,23 @@ const Product = {
         const created = [];
         const failed = [];
 
-        const [cats] = await db.execute(`SELECT id, name FROM categories`);
-        const [brands] = await db.execute(`SELECT id, name FROM brands`);
-        const catMap = {};
-        const brandMap = {};
-        cats.forEach(c => { catMap[c.name.toLowerCase().trim()] = c.id; });
-        brands.forEach(b => { brandMap[b.name.toLowerCase().trim()] = b.id; });
-
         const slugify = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+        const parseImportImages = (row) => {
+            const urls = [];
+            const pipeField = row.imageUrls || row.images || '';
+            if (typeof pipeField === 'string' && pipeField.trim()) {
+                urls.push(...pipeField.split('|').map(s => s.trim()).filter(Boolean));
+            }
+            if (Array.isArray(row.images)) {
+                urls.push(...row.images.filter(Boolean));
+            }
+            for (let i = 1; i <= 20; i++) {
+                const key = `image${i}`;
+                if (row[key] && String(row[key]).trim()) urls.push(String(row[key]).trim());
+            }
+            return [...new Set(urls)];
+        };
 
         for (let i = 0; i < items.length; i++) {
             const row = items[i];
@@ -317,33 +334,27 @@ const Product = {
                     continue;
                 }
 
-                let categoryId = row.categoryId || null;
-                let brandId = row.brandId || null;
-                if (!categoryId && row.categoryName) {
-                    categoryId = catMap[String(row.categoryName).toLowerCase().trim()] || null;
-                }
-                if (!brandId && row.brandName) {
-                    brandId = brandMap[String(row.brandName).toLowerCase().trim()] || null;
-                }
+                let categoryId = row.categoryId != null ? row.categoryId : null;
+                let brandId = row.brandId != null ? row.brandId : null;
 
-                let images = row.images || [];
-                if (typeof images === 'string') {
-                    images = images.split('|').map(s => s.trim()).filter(Boolean);
-                }
-                if (row.imageUrls && typeof row.imageUrls === 'string') {
-                    images = row.imageUrls.split('|').map(s => s.trim()).filter(Boolean);
-                }
+                const images = parseImportImages(row);
 
                 let tags = row.tags || [];
                 if (typeof tags === 'string') {
                     tags = tags.split('|').map(s => s.trim()).filter(Boolean);
                 }
 
+                const price = parseFloat(row.price) || 0;
+                if (price <= 0) {
+                    failed.push({ row: i + 1, name: row.name, error: 'Price must be greater than 0' });
+                    continue;
+                }
+
                 const payload = {
                     name: String(row.name).trim(),
                     slug: row.slug ? String(row.slug).trim() : slugify(row.name),
                     description: row.description || '',
-                    price: parseFloat(row.price) || 0,
+                    price,
                     salePrice: row.salePrice ? parseFloat(row.salePrice) : null,
                     categoryId,
                     brandId,
@@ -351,7 +362,9 @@ const Product = {
                     variants: row.variants || [],
                     tags,
                     isActive: row.isActive === false || row.isActive === 'false' || row.isActive === 0 || row.isActive === '0' ? 0 : 1,
-                    sortOrder: parseInt(row.sortOrder, 10) || 0
+                    sortOrder: parseInt(row.sortOrder, 10) || 0,
+                    avgRating: row.avgRating != null && row.avgRating !== '' ? parseFloat(row.avgRating) : 0,
+                    reviewCount: row.reviewCount != null && row.reviewCount !== '' ? parseInt(row.reviewCount, 10) : 0
                 };
 
                 const result = await Product.create(payload);
